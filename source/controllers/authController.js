@@ -2,6 +2,18 @@ const UserModel = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const asyncHandle = require("express-async-handler");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
+require("dotenv").config();
+
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 587,
+  auth: {
+    user: process.env.USERNAME_EMAIL,
+    pass: process.env.PASSWORD_EMAIL
+  }
+});
+
 const getJsonWebToken = async (email, id) => {
   const payload = {
     email,
@@ -14,6 +26,42 @@ const getJsonWebToken = async (email, id) => {
 
   return token;
 };
+
+const handleSendEmail = async (val, email) => {
+  try {
+    await transporter.sendMail({
+      from: `Support <${process.env.USERNAME_EMAIL}>`,
+      to: email,
+      subject: "Verify your email",
+      text: `Verification email`,
+      html: `<h1>${val}</h1>`
+    });
+    //console.log(result);
+    return "OK";
+  } catch (err) {
+    return err;
+  }
+  //console.log(verificationCode);
+};
+const verification = asyncHandle(async (req, res) => {
+  const { email } = req.body;
+  const verificationCode = Math.round(Math.random() * 9000 + 1000);
+  try {
+    await handleSendEmail(verificationCode, email);
+    res.status(200).json({
+      message: "Send verification code successfully",
+      data: {
+        code: verificationCode
+      }
+    });
+  } catch (error) {
+    res.status(401);
+    throw new Error(`Verification`);
+  }
+  //console.log(email);
+  return;
+  res.send("verify email");
+});
 
 const register = asyncHandle(async (req, res) => {
   const { email, fullname, password } = req.body;
@@ -72,5 +120,6 @@ const login = asyncHandle(async (req, res) => {
 
 module.exports = {
   register,
-  login
+  login,
+  verification
 };
