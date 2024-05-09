@@ -58,9 +58,7 @@ const verification = asyncHandle(async (req, res) => {
     res.status(401);
     throw new Error(`Verification`);
   }
-  //console.log(email);
   return;
-  res.send("verify email");
 });
 
 const register = asyncHandle(async (req, res) => {
