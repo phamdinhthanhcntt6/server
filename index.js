@@ -6,6 +6,7 @@ const connectDb = require("./source/configs/connectDb");
 const errorMiddleHandle = require("./middlewares/errorMiddleware");
 require("dotenv").config();
 app.use(cors());
+//middleware
 app.use(express.json());
 
 const PORT = 3001;

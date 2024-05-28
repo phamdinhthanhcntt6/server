@@ -10,49 +10,50 @@ const transporter = nodemailer.createTransport({
   port: 587,
   auth: {
     user: process.env.USERNAME_EMAIL,
-    pass: process.env.PASSWORD_EMAIL
-  }
+    pass: process.env.PASSWORD_EMAIL,
+  },
 });
 
 const getJsonWebToken = async (email, id) => {
   const payload = {
     email,
-    id
+    id,
   };
 
   const token = jwt.sign(payload, process.env.SECRET_KEY, {
-    expiresIn: "7d" //token hết hạn sau 7 ngày
+    expiresIn: "7d", //token hết hạn sau 7 ngày
   });
 
   return token;
 };
 
-const handleSendEmail = async (val, email) => {
+const handleSendEmail = async (val) => {
   try {
-    await transporter.sendMail({
-      from: `Support <${process.env.USERNAME_EMAIL}>`,
-      to: email,
-      subject: "Verify your email",
-      text: `Verification email`,
-      html: `<h1>${val}</h1>`
-    });
+    await transporter.sendMail(val);
     //console.log(result);
     return "OK";
   } catch (err) {
     return err;
   }
-  //console.log(verificationCode);
 };
+
 const verification = asyncHandle(async (req, res) => {
   const { email } = req.body;
   const verificationCode = Math.round(Math.random() * 9000 + 1000);
   try {
-    await handleSendEmail(verificationCode, email);
+    const data = {
+      from: `Verify <${process.env.USERNAME_EMAIL}>`,
+      to: email,
+      subject: "Verify your email",
+      text: `Verification email`,
+      html: `<h1>${verificationCode}</h1>`,
+    };
+    await handleSendEmail(data);
     res.status(200).json({
       message: "Send verification code successfully",
       data: {
-        code: verificationCode
-      }
+        code: verificationCode,
+      },
     });
   } catch (error) {
     res.status(401);
@@ -77,7 +78,7 @@ const register = asyncHandle(async (req, res) => {
   const newUser = new UserModel({
     fullname: fullname ?? "",
     email,
-    password: hashedPassword
+    password: hashedPassword,
   });
   await newUser.save();
   res.status(200).json({
@@ -85,8 +86,8 @@ const register = asyncHandle(async (req, res) => {
     data: {
       email: newUser.email,
       id: newUser.id,
-      accesstoken: await getJsonWebToken(email, newUser.id)
-    }
+      accesstoken: await getJsonWebToken(email, newUser.id),
+    },
   });
   return;
   //res.send("register");
@@ -97,7 +98,7 @@ const login = asyncHandle(async (req, res) => {
   const existingUser = await UserModel.findOne({ email });
   if (!existingUser) {
     res.status(403).json({
-      message: "User not found"
+      message: "User not found",
     });
     throw new Error(`User not found`);
   }
@@ -111,13 +112,89 @@ const login = asyncHandle(async (req, res) => {
     data: {
       email: existingUser.email,
       id: existingUser.id,
-      accesstoken: await getJsonWebToken(email, existingUser.id)
-    }
+      accesstoken: await getJsonWebToken(email, existingUser.id),
+    },
+  });
+});
+
+const forgotPassword = asyncHandle(async (req, res) => {
+  const { email } = req.body;
+
+  const randomPassword = Math.round(100000 + Math.random() * 99000);
+
+  const data = {
+    from: `"New Password" <${process.env.USERNAME_EMAIL}>`,
+    to: email,
+    subject: "Verification email code",
+    text: "Your code to verification email",
+    html: `<h1>${randomPassword}</h1>`,
+  };
+
+  const user = await UserModel.findOne({ email });
+  if (user) {
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(`${randomPassword}`, salt);
+
+    await UserModel.findByIdAndUpdate(user._id, {
+      password: hashedPassword,
+      isChangePassword: true,
+    })
+      .then(() => {
+        console.log("Done");
+      })
+      .catch((error) => console.log(error));
+
+    await handleSendEmail(data)
+      .then(() => {
+        res.status(200).json({
+          message: "Send email new password successfully!!!",
+          data: [],
+        });
+      })
+      .catch((error) => {
+        res.status(401);
+        throw new Error("Can not send email");
+      });
+  } else {
+    res.status(401);
+    throw new Error("User not found!!!");
+  }
+  return;
+});
+const handleLoginWithGoogle = asyncHandle(async (req, res) => {
+  const userInfo = req.body;
+
+  const existingUser = await UserModel.findOne({ email: userInfo.email });
+
+  let user = { ...userInfo };
+
+  if (existingUser) {
+    await UserModel.findByIdAndUpdate(existingUser.id, {
+      ...userInfo,
+      updateAt: Date.now(),
+    }),
+      (user.accesstoken = await getJsonWebToken(userInfo.email, userInfo.id));
+  } else {
+    const newUser = new UserModel({
+      email: userInfo.email,
+      fullname: userInfo.name,
+      ...userInfo,
+    });
+    await newUser.save();
+
+    user.accesstoken = await getJsonWebToken(userInfo.email, newUser.id);
+  }
+
+  res.status(200).json({
+    message: "Login with google successfully",
+    data: user,
   });
 });
 
 module.exports = {
   register,
   login,
-  verification
+  verification,
+  forgotPassword,
+  handleLoginWithGoogle,
 };
